@@ -6,6 +6,20 @@
     <title>Login - Cypress Calendar</title>
     <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css' rel='stylesheet'>
     <link rel="icon" type="image/png" href="assets/cypress-logo.png">
+    <style>
+        body {
+            background-image: url('assets/fondo.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            
+        }
+        .card {
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+    </style>
 </head>
 <body class="bg-light">
     <div class="container mt-5">
@@ -35,6 +49,9 @@
                                 Ingresar
                             </button>
                         </form>
+                        <p class="text-center mt-3">
+                            <a href="registro.php" class="text-decoration-none text-success">¿No tienes cuenta? Registrate</a>
+                        </p>
                     </div>
                 </div>
             </div>
