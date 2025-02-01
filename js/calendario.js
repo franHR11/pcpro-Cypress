@@ -1,37 +1,32 @@
-// Definir calendar como variable global
+// Definir variables globales
 let calendar;
+let eventoModal;
+let calendarioModal; // Añadir esta variable global
 
 document.addEventListener('DOMContentLoaded', function() {
-    const eventoModal = new bootstrap.Modal(document.getElementById('eventoModal'));
-    const calendarioModal = new bootstrap.Modal(document.getElementById('calendarioModal'));
-    
+    eventoModal = new bootstrap.Modal(document.getElementById('eventoModal'), {
+        backdrop: 'static',
+        keyboard: false,
+        focus: true
+    });
+    calendarioModal = new bootstrap.Modal(document.getElementById('calendarioModal'), {
+        backdrop: 'static',
+        keyboard: false,
+        focus: true
+    });
+
     // Inicializar Set global para calendarios visibles
     window.calendariosVisibles = new Set();
 
-    // Obtener eventos del servidor
-    function obtenerEventos(fetchInfo, successCallback, failureCallback) {
-        fetch('./api/eventos.php')
-            .then(response => response.json())
-            .then(eventos => {
-                const eventosFormateados = eventos.map(evento => ({
-                    id: evento.id,
-                    title: evento.titulo,
-                    start: evento.fecha_inicio,
-                    end: evento.fecha_fin,
-                    description: evento.descripcion,
-                    backgroundColor: evento.calendario_color,
-                    display: 'auto',
-                    extendedProps: {
-                        descripcion: evento.descripcion,
-                        calendario_id: evento.calendario_id,
-                        calendario_nombre: evento.calendario_nombre,
-                        recurrencia: evento.recurrencia,
-                        recurrencia_fin: evento.recurrencia_fin
-                    }
-                }));
-                successCallback(eventosFormateados);
-            })
-            .catch(error => failureCallback(error));
+    // Agregar la función formatearFechaLocal antes de la inicialización del calendario
+    function formatearFechaLocal(fecha) {
+        const year = fecha.getFullYear();
+        const month = String(fecha.getMonth() + 1).padStart(2, '0');
+        const day = String(fecha.getDate()).padStart(2, '0');
+        const hours = String(fecha.getHours()).padStart(2, '0');
+        const minutes = String(fecha.getMinutes()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
 
     // Inicializar calendario
@@ -39,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
         initialView: 'dayGridMonth',
         locale: 'es',
         firstDay: 1, // 1 = Lunes (0 sería Domingo)
+        nowIndicator: true, // Añadir el indicador de hora actual
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
@@ -58,20 +54,34 @@ document.addEventListener('DOMContentLoaded', function() {
             minute: '2-digit',
             hour12: false // Formato 24 horas
         },
-        slotLabelClassNames: 'fc-timegrid-slot-label', // Añadir clase personalizada
         dayHeaderFormat: {
-            weekday: 'long' // Nombre completo del día
+            weekday: 'long',
+            day: 'numeric',
+            omitCommas: true
+        },
+        views: {
+            timeGridWeek: {
+                dayHeaderFormat: {
+                    weekday: 'long',
+                    day: 'numeric',
+                    omitCommas: true
+                },
+                nowIndicator: true // Asegurar que el indicador aparezca en vista semana
+            },
+            timeGridDay: {
+                dayHeaderFormat: {
+                    weekday: 'long',
+                    day: 'numeric',
+                    omitCommas: true
+                },
+                nowIndicator: true // Asegurar que el indicador aparezca en vista día
+            }
         },
         dayHeaderClassNames: 'calendario-header-dia',
         slotMinTime: '00:00:00', // Hora mínima
         slotMaxTime: '24:00:00', // Hora máxima
         height: 'auto', // Ajustar altura automáticamente
         contentHeight: 'auto', // Ajustar altura del contenido automáticamente
-        slotLabelClassNames: 'fc-timegrid-slot-label', // Añadir clase personalizada
-        dayHeaderFormat: {
-            weekday: 'long' // Nombre completo del día
-        },
-        dayHeaderClassNames: 'calendario-header-dia',
         selectable: true,
         editable: true, // Permite arrastrar eventos
         eventDisplay: 'block', // Forzar display tipo bloque para todos los eventos
@@ -105,7 +115,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     eventos.forEach(evento => {
                         // Parsear los días de la semana desde JSON
                         evento.dias_semana = evento.dias_semana ? JSON.parse(evento.dias_semana) : [];
-                        
+
+                        // Si el evento empieza y termina en el mismo instante, agregar un minuto de duración
+                        let fechaFin = evento.fecha_fin;
+                        if (evento.fecha_inicio === evento.fecha_fin) {
+                            const d = new Date(evento.fecha_fin);
+                            d.setMinutes(d.getMinutes() + 1);
+                            fechaFin = d.toISOString();
+                        }
+
                         // Si tiene recurrencia y días seleccionados, generar eventos recurrentes
                         if (evento.recurrencia !== 'none' && evento.dias_semana.length > 0 && evento.recurrencia_fin) {
                             const eventosRecurrentes = generarEventosRecurrentes(evento);
@@ -120,19 +138,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 });
                             });
                         } else {
-                            // Si el evento empieza y termina en el mismo instante, agregar un minuto de duración
-                            let fechaFin = evento.fecha_fin;
-                            if (evento.fecha_inicio === evento.fecha_fin) {
-                                const d = new Date(evento.fecha_fin);
-                                d.setMinutes(d.getMinutes() + 1);
-                                fechaFin = d.toISOString();
-                            }
                             // Evento normal sin recurrencia
                             allEvents.push({
                                 id: evento.id,
                                 title: evento.titulo,
                                 start: evento.fecha_inicio,
-                                end: fechaFin,
+                                end: fechaFin, // Usar la fecha ajustada
                                 backgroundColor: evento.calendario_color,
                                 borderColor: evento.calendario_color,
                                 textColor: '#ffffff',
@@ -158,7 +169,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         },
         select: function(info) {
-            prepararModal('nuevo', info);
+            // Crear fechas en zona horaria local
+            const fechaInicio = new Date(info.start.getTime());
+            const fechaFin = new Date(info.start.getTime());
+            
+            // Ajustar horas manteniendo la zona horaria local
+            fechaInicio.setHours(0, 0, 0, 0);
+            fechaFin.setHours(0, 1, 0, 0);
+
+            const nuevoEvento = {
+                start: fechaInicio,
+                end: fechaFin,
+                // Usar formatearFecha directamente
+                startStr: formatearFecha(fechaInicio),
+                endStr: formatearFecha(fechaFin)
+            };
+
+            console.log('Fechas del evento:', {
+                inicio: nuevoEvento.startStr,
+                fin: nuevoEvento.endStr
+            });
+            
+            prepararModal('nuevo', nuevoEvento);
             eventoModal.show();
         },
         eventClick: function(info) {
@@ -166,17 +198,16 @@ document.addEventListener('DOMContentLoaded', function() {
             eventoModal.show();
         },
         eventDidMount: function(info) {
-            // Forzar estilo de bloque para eventos de un solo día
-            if (info.event.start?.toDateString() === info.event.end?.toDateString()) {
-                info.el.classList.add('fc-daygrid-block-event');
-                info.el.style.backgroundColor = info.event.backgroundColor;
-                info.el.style.borderColor = info.event.borderColor;
-            }
-            
             // Verificar si el calendario está visible
             const calId = info.event.extendedProps.calendario_id.toString();
             if (!window.calendariosVisibles.has(calId)) {
                 info.event.setProp('display', 'none');
+            }
+
+            // Forzar el color en la vista de mes para eventos de un solo día
+            if (info.view.type === 'dayGridMonth' && info.event.start && info.event.end && info.event.start.getTime() === info.event.end.getTime()) {
+                info.el.style.backgroundColor = info.event.backgroundColor;
+                info.el.style.borderColor = info.event.borderColor;
             }
         },
         viewDidMount: function(view) {
@@ -189,34 +220,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 timeGridAxis.insertBefore(header, timeGridAxis.firstChild);
             }
         },
-        views: {
-            dayGridMonth: {
-                dayMaxEventRows: true,
-                dayMaxEvents: true,
-                eventDisplay: 'block',
-                eventClassNames: ['fc-daygrid-block-event']
-            }
+        // Modificar el manejador dateClick
+        dateClick: function(info) {
+            // Convert the clicked date to the local timezone
+            const fecha = new Date(info.date);
+            const fechaInicio = new Date(fecha.setHours(0, 0, 0, 0)); // Start of the day
+            const fechaFin = new Date(fecha.setHours(23, 59, 59, 999)); // End of the day
+
+            // Format the dates for the input fields
+            const fechaInicioStr = formatearFechaLocal(fechaInicio);
+            const fechaFinStr = formatearFechaLocal(fechaFin);
+
+            // Set the values in the modal inputs
+            document.getElementById('fecha_inicio').value = fechaInicioStr;
+            document.getElementById('fecha_fin').value = fechaFinStr;
+
+            // Prepare the modal for a new event
+            prepararModal('nuevo', {
+                startStr: fechaInicioStr,
+                endStr: fechaFinStr
+            });
+
+            // Show the modal
+            eventoModal.show();
         }
     });
-    
+
     calendar.render();
     cargarCalendarios();
-    
+
     // Botón nuevo calendario
     document.getElementById('nuevo-calendario').addEventListener('click', function() {
+        document.querySelector('#calendarioModal .modal-title').textContent = 'Nuevo Calendario';
+        document.getElementById('calendario_id_hidden').value = '';
+        document.getElementById('calendario_nombre').value = '';
+        document.getElementById('calendario_color').value = '#3788d8';
         calendarioModal.show();
     });
-    
+
     // Guardar nuevo calendario
     document.getElementById('guardar-calendario').addEventListener('click', function() {
-        // Utilizar el input hidden para determinar si es edición o creación
         const id = document.getElementById('calendario_id_hidden').value;
         const formData = {
-            id: id, 
+            id: id,
             nombre: document.getElementById('calendario_nombre').value,
             color: document.getElementById('calendario_color').value
         };
-        
+
         fetch('api/calendarios.php', {
             method: id ? 'PUT' : 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -227,7 +277,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const calendarioModal = bootstrap.Modal.getInstance(document.getElementById('calendarioModal'));
             calendarioModal.hide();
             cargarCalendarios();
-            // Reiniciar el formulario incluyendo el hidden
             document.getElementById('calendarioForm').reset();
             document.getElementById('calendario_id_hidden').value = '';
         });
@@ -238,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('recurrencia_fin_container');
         container.style.display = e.target.value === 'none' ? 'none' : 'block';
     });
-    
+
     // Guardar evento
     document.getElementById('guardar-evento').addEventListener('click', function() {
         if (!document.getElementById('eventoForm').checkValidity()) {
@@ -263,29 +312,18 @@ document.addEventListener('DOMContentLoaded', function() {
             calendario_color: calendarioColor
         };
 
-        // Extraer color del calendario desde el option seleccionado
-        const select = document.getElementById('calendario_id');
-        const selectedOption = select.options[select.selectedIndex];
-        formData.calendario_color = selectedOption ? selectedOption.getAttribute('data-color') : '#3788d8';
-
-        // Depuración: Verificar los datos enviados
-        console.log('Datos enviados:', formData);
-        console.log('Comprobación dias_semana:', formData.dias_semana);
-
         fetch('./api/eventos.php', {
             method: formData.id ? 'PUT' : 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(formData)
         })
         .then(response => {
-            if (!response.ok) {
-                throw new Error('Error en la respuesta del servidor');
-            }
+            if (!response.ok) throw new Error('Error en la respuesta del servidor');
             return response.json();
         })
         .then(data => {
             eventoModal.hide();
-            calendar.refetchEvents(); // Recargar eventos
+            calendar.refetchEvents();
             document.getElementById('eventoForm').reset();
         })
         .catch(error => {
@@ -301,32 +339,48 @@ document.addEventListener('DOMContentLoaded', function() {
             eliminarEvento(eventoId);
         }
     });
+
+    // Agregar manejadores de eventos para el modal
+    document.getElementById('calendarioModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('calendario_nombre').focus();
+    });
+
+    document.getElementById('eventoModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('titulo').focus();
+    });
+
+    // Modificar el cierre de los modales
+    document.getElementById('calendarioModal').addEventListener('hide.bs.modal', function () {
+        document.getElementById('calendarioForm').reset();
+        document.getElementById('calendario_id_hidden').value = '';
+    });
+
+    document.getElementById('eventoModal').addEventListener('hide.bs.modal', function () {
+        document.getElementById('eventoForm').reset();
+    });
 });
 
-// Mover las funciones auxiliares al scope global
+// Función para cargar calendarios
 function cargarCalendarios() {
     fetch('api/calendarios.php')
         .then(response => response.json())
         .then(calendarios => {
             const lista = document.getElementById('lista-calendarios');
             const select = document.getElementById('calendario_id');
-            
+
             lista.innerHTML = '';
             select.innerHTML = '';
-            
-            // Por defecto todos los calendarios están visibles
+
             window.calendariosVisibles.clear();
             calendarios.forEach(cal => {
                 const calId = cal.id.toString();
-                window.calendariosVisibles.add(calId); // Añadir todos por defecto
-                
-                // Verificar estado guardado
+                window.calendariosVisibles.add(calId);
+
                 const estadoGuardado = localStorage.getItem(`cal_visible_${calId}`);
                 if (estadoGuardado === 'false') {
                     window.calendariosVisibles.delete(calId);
                 }
 
-                // Agregar a la lista de calendarios
                 lista.innerHTML += `
                     <div class="calendario-item" data-id="${calId}" style="background-color: ${cal.color}">
                         <input type="checkbox" class="calendario-visible" 
@@ -336,97 +390,105 @@ function cargarCalendarios() {
                             ${cal.nombre}
                         </label>
                         <div class="calendario-acciones">
-                            <button class="btn btn-sm btn-editar" title="Editar">✏️</button>
-                            <button class="btn btn-sm btn-eliminar" title="Eliminar">🗑️</button>
+                            <button class="btn btn-sm btn-editar" title="Editar" data-id="${calId}" data-nombre="${cal.nombre}" data-color="${cal.color}">✏️</button>
+                            <button class="btn btn-sm btn-eliminar" title="Eliminar" data-id="${calId}">🗑️</button>
                         </div>
                     </div>
                 `;
-                
-                // Agregar la opción del select con data-color
+
                 select.innerHTML += `<option value="${calId}" data-color="${cal.color}">${cal.nombre}</option>`;
             });
 
-            // Event listeners para los checkboxes
             document.querySelectorAll('.calendario-visible').forEach(checkbox => {
                 const calId = checkbox.closest('.calendario-item').dataset.id;
-                
+
                 checkbox.addEventListener('change', function(e) {
                     const isChecked = e.target.checked;
                     localStorage.setItem(`cal_visible_${calId}`, isChecked);
-                    
+
                     if (isChecked) {
                         window.calendariosVisibles.add(calId);
                     } else {
                         window.calendariosVisibles.delete(calId);
                     }
-                    
+
                     actualizarEventosVisibles();
                 });
             });
 
-            // Añadir event listeners y cargar estados guardados
-            document.querySelectorAll('.calendario-item').forEach(item => {
-                const calId = item.dataset.id;
-                const checkbox = item.querySelector('.calendario-visible');
-
-                // Restaurar estado guardado
-                const estado = localStorage.getItem(`cal_visible_${calId}`);
-                if (estado === 'false') {
-                    checkbox.checked = false;
-                    ocultarEventosCalendario(calId);
-                }
-
-                // Event listener para checkbox
-                checkbox.addEventListener('change', function(e) {
-                    localStorage.setItem(`cal_visible_${calId}`, e.target.checked);
-                    if (e.target.checked) {
-                        mostrarEventosCalendario(calId);
-                    } else {
-                        ocultarEventosCalendario(calId);
-                    }
+            // Añadir manejadores para los botones de editar y eliminar
+            document.querySelectorAll('.btn-editar').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.getElementById('calendario_id_hidden').value = this.dataset.id;
+                    document.getElementById('calendario_nombre').value = this.dataset.nombre;
+                    document.getElementById('calendario_color').value = this.dataset.color;
+                    // Cambiar el título del modal para edición
+                    document.querySelector('#calendarioModal .modal-title').textContent = 'Editar Calendario';
+                    calendarioModal.show();
                 });
+            });
 
-                // Botón editar
-                item.querySelector('.btn-editar').addEventListener('click', function() {
-                    editarCalendario(calId);
-                });
-
-                // Botón eliminar
-                item.querySelector('.btn-eliminar').addEventListener('click', function() {
-                    if (confirm('¿Estás seguro de eliminar este calendario?')) {
+            document.querySelectorAll('.btn-eliminar').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const calId = this.dataset.id;
+                    if (confirm('¿Estás seguro de eliminar este calendario? Se eliminarán todos los eventos asociados.')) {
                         eliminarCalendario(calId);
                     }
                 });
             });
 
-            // Actualizar eventos después de cargar calendarios
             actualizarEventosVisibles();
         });
 }
 
+// Añadir esta nueva función para eliminar calendarios
+function eliminarCalendario(calId) {
+    fetch(`api/calendarios.php?id=${calId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        cargarCalendarios();
+        calendar.refetchEvents();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al eliminar el calendario');
+    });
+}
+
+// Función para preparar el modal de eventos
 function prepararModal(tipo, info) {
     const form = document.getElementById('eventoForm');
     form.reset();
-    
+
     if (tipo === 'nuevo') {
         document.getElementById('evento_id').value = '';
         document.getElementById('fecha_inicio').value = info.startStr;
         document.getElementById('fecha_fin').value = info.endStr;
-        document.getElementById('eliminar-evento').style.display = 'none'; // Ocultar botón de eliminar
+        document.getElementById('eliminar-evento').style.display = 'none';
     } else {
         document.getElementById('evento_id').value = info.id;
         document.getElementById('titulo').value = info.title;
         document.getElementById('descripcion').value = info.extendedProps.descripcion;
-        document.getElementById('fecha_inicio').value = info.start;
-        document.getElementById('fecha_fin').value = info.end;
+        document.getElementById('fecha_inicio').value = formatearFecha(info.start);
+        document.getElementById('fecha_fin').value = formatearFecha(info.end);
         document.getElementById('calendario_id').value = info.extendedProps.calendario_id;
-        document.getElementById('recurrencia').value = info.extendedProps.recurrencia;
-        // Añadir color del calendario al evento
-        document.getElementById('calendario_color').value = info.backgroundColor;
-        document.getElementById('eliminar-evento').style.display = 'block'; // Mostrar botón de eliminar
+        document.getElementById('recurrencia').value = info.extendedProps.recurrencia || 'none';
+        
+        // Mostrar u ocultar el campo de fecha fin de recurrencia según corresponda
+        const recurrenciaFinContainer = document.getElementById('recurrencia_fin_container');
+        recurrenciaFinContainer.style.display = info.extendedProps.recurrencia !== 'none' ? 'block' : 'none';
+        
+        // Establecer la fecha de fin de recurrencia si existe
+        if (info.extendedProps.recurrencia_fin) {
+            document.getElementById('recurrencia_fin').value = formatearFecha(new Date(info.extendedProps.recurrencia_fin));
+        }
+        
+        document.getElementById('eliminar-evento').style.display = 'block';
     }
-    
-    // Añadir checkboxes para los días de la semana
+
+    // Configurar los checkboxes de días de la semana
     const diasSemanaContainer = document.getElementById('dias_semana_container');
     if (diasSemanaContainer) {
         diasSemanaContainer.innerHTML = `
@@ -438,60 +500,47 @@ function prepararModal(tipo, info) {
             <label><input type="checkbox" name="dias_semana" value="S"> S</label>
             <label><input type="checkbox" name="dias_semana" value="D"> D</label>
         `;
-    } else {
-        console.error('El contenedor de días de la semana no se encontró en el DOM.');
+
+        // Marcar los días de la semana previamente seleccionados
+        if (tipo === 'editar' && info.extendedProps.dias_semana) {
+            const diasSeleccionados = info.extendedProps.dias_semana;
+            const checkboxes = diasSemanaContainer.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                if (diasSeleccionados.includes(checkbox.value)) {
+                    checkbox.checked = true;
+                }
+            });
+        }
     }
 }
 
-function editarCalendario(id) {
-    fetch(`api/calendarios.php?id=${id}`)
-        .then(response => response.json())
-        .then(calendario => {
-            // Llenar el campo hidden para saber que se está editando
-            document.getElementById('calendario_id_hidden').value = calendario.id;
-            document.getElementById('calendario_nombre').value = calendario.nombre;
-            document.getElementById('calendario_color').value = calendario.color;
-            const calendarioModal = bootstrap.Modal.getInstance(document.getElementById('calendarioModal'));
-            calendarioModal.show();
-        });
+// Función auxiliar para formatear fechas
+function formatearFecha(fecha) {
+    if (!fecha) return '';
+    const d = new Date(fecha);
+    
+    // Crear string en formato YYYY-MM-DDTHH:mm
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function eliminarCalendario(id) {
-    fetch(`api/calendarios.php?id=${id}`, {
-        method: 'DELETE'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            cargarCalendarios();
-            calendar.refetchEvents();
-        }
-    });
+// Agregar nueva función para formatear fechas en zona horaria local
+function formatearFechaLocal(fecha) {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    const hours = String(fecha.getHours()).padStart(2, '0');
+    const minutes = String(fecha.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function eliminarEvento(id) {
-    fetch(`./api/eventos.php?id=${id}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
-        if (!response.ok) throw new Error('Error en la respuesta del servidor');
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            calendar.refetchEvents(); // Recargar eventos
-            const eventoModal = bootstrap.Modal.getInstance(document.getElementById('eventoModal'));
-            eventoModal.hide(); // Ocultar modal
-        } else {
-            alert('Error al eliminar el evento');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error al eliminar el evento');
-    });
-}
-
+// Función para generar eventos recurrentes
 function generarEventosRecurrentes(evento) {
     const eventos = [];
     const inicio = new Date(evento.fecha_inicio);
@@ -513,7 +562,7 @@ function generarEventosRecurrentes(evento) {
                 backgroundColor: evento.calendario_color,
                 borderColor: evento.calendario_color,
                 textColor: '#ffffff',
-                allDay: false,  // Forzar que el evento recurrente no sea "allDay"
+                allDay: false,
                 extendedProps: {
                     descripcion: evento.descripcion,
                     calendario_id: evento.calendario_id,
@@ -529,7 +578,7 @@ function generarEventosRecurrentes(evento) {
     return eventos;
 }
 
-// Función para actualizar eventos
+// Función para actualizar eventos visibles
 window.actualizarEventosVisibles = function() {
     const eventos = calendar.getEvents();
     eventos.forEach(evento => {
@@ -537,4 +586,27 @@ window.actualizarEventosVisibles = function() {
         const display = window.calendariosVisibles.has(calId) ? 'auto' : 'none';
         evento.setProp('display', display);
     });
+
 };
+// Función para eliminar eventos
+function eliminarEvento(eventoId) {
+    fetch(`./api/eventos.php?id=${eventoId}`, {
+        method: 'DELETE'
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Error al eliminar el evento');
+        return response.json();
+    })
+    .then(data => {
+        const evento = calendar.getEventById(eventoId);
+        if (evento) {
+            evento.remove();
+        }
+        eventoModal.hide();
+        calendar.refetchEvents();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al eliminar el evento');
+    });
+}

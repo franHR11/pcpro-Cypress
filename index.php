@@ -26,7 +26,8 @@ if (!isset($_SESSION['usuario_id'])) {
                 </div>
                 <div class="navbar-text text-white">
                     Bienvenido, <?php echo htmlspecialchars($_SESSION['usuario_nombre']); ?>
-                    <a href="api/logout.php" class="btn btn-outline-light ms-3">Cerrar sesión</a>
+                    <a href="lista/" class="btn btn-outline-light mx-2">Todo List</a>
+                    <a href="api/logout.php" class="btn btn-outline-light">Cerrar sesión</a>
                 </div>
             </div>
         </nav>
@@ -48,7 +49,7 @@ if (!isset($_SESSION['usuario_id'])) {
     </div>
 
     <!-- Modal para eventos -->
-    <div class="modal fade" id="eventoModal" tabindex="-1">
+    <div class="modal fade" id="eventoModal" tabindex="-1" aria-labelledby="eventoModalLabel" aria-modal="true" role="dialog">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
@@ -107,7 +108,7 @@ if (!isset($_SESSION['usuario_id'])) {
     </div>
 
     <!-- Modal para nuevo calendario -->
-    <div class="modal fade" id="calendarioModal" tabindex="-1">
+    <div class="modal fade" id="calendarioModal" tabindex="-1" aria-labelledby="calendarioModalLabel" aria-modal="true" role="dialog">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">

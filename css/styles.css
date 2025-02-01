@@ -439,3 +439,15 @@
 }
 
 /* ...existing code... */
+
+.fc .fc-col-header-cell-cushion {
+    display: inline-block;
+    padding: 2px 4px;
+}
+
+.fc .fc-col-header-cell-cushion:after {
+    content: " " attr(data-date);
+    font-weight: normal;
+}
+
+/* ...existing code... */
