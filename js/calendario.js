@@ -74,7 +74,8 @@ document.addEventListener('DOMContentLoaded', function() {
         dayHeaderClassNames: 'calendario-header-dia',
         selectable: true,
         editable: true, // Permite arrastrar eventos
-        eventDisplay: 'block', // Mejora la visualización
+        eventDisplay: 'block', // Forzar display tipo bloque para todos los eventos
+        eventClassNames: 'fc-daygrid-block-event', // Forzar clase de bloque
         displayEventTime: true, // Muestra la hora
         displayEventEnd: true, // Muestra hora de fin
         eventTimeFormat: {
@@ -96,32 +97,60 @@ document.addEventListener('DOMContentLoaded', function() {
         events: function(fetchInfo, successCallback, failureCallback) {
             fetch('./api/eventos.php')
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Error en la respuesta del servidor');
-                    }
+                    if (!response.ok) throw new Error('Error en la respuesta del servidor');
                     return response.json();
                 })
                 .then(eventos => {
-                    const eventosFormateados = eventos.map(evento => ({
-                        id: evento.id,
-                        title: evento.titulo,
-                        start: evento.fecha_inicio,
-                        end: evento.fecha_fin,
-                        backgroundColor: evento.calendario_color,
-                        borderColor: evento.calendario_color,
-                        textColor: '#ffffff',
-                        allDay: false,
-                        display: window.calendariosVisibles.has(evento.calendario_id.toString()) ? 'auto' : 'none',
-                        extendedProps: {
-                            descripcion: evento.descripcion,
-                            calendario_id: evento.calendario_id,
-                            calendario_nombre: evento.calendario_nombre,
-                            recurrencia: evento.recurrencia,
-                            recurrencia_fin: evento.recurrencia_fin
+                    const allEvents = [];
+                    eventos.forEach(evento => {
+                        // Parsear los días de la semana desde JSON
+                        evento.dias_semana = evento.dias_semana ? JSON.parse(evento.dias_semana) : [];
+                        
+                        // Si tiene recurrencia y días seleccionados, generar eventos recurrentes
+                        if (evento.recurrencia !== 'none' && evento.dias_semana.length > 0 && evento.recurrencia_fin) {
+                            const eventosRecurrentes = generarEventosRecurrentes(evento);
+                            eventosRecurrentes.forEach(evt => {
+                                allEvents.push({
+                                    ...evt,
+                                    backgroundColor: evento.calendario_color,
+                                    borderColor: evento.calendario_color,
+                                    textColor: '#ffffff',
+                                    display: window.calendariosVisibles.has(evento.calendario_id.toString()) ? 'auto' : 'none',
+                                    className: 'fc-daygrid-block-event' // Forzar clase de bloque
+                                });
+                            });
+                        } else {
+                            // Si el evento empieza y termina en el mismo instante, agregar un minuto de duración
+                            let fechaFin = evento.fecha_fin;
+                            if (evento.fecha_inicio === evento.fecha_fin) {
+                                const d = new Date(evento.fecha_fin);
+                                d.setMinutes(d.getMinutes() + 1);
+                                fechaFin = d.toISOString();
+                            }
+                            // Evento normal sin recurrencia
+                            allEvents.push({
+                                id: evento.id,
+                                title: evento.titulo,
+                                start: evento.fecha_inicio,
+                                end: fechaFin,
+                                backgroundColor: evento.calendario_color,
+                                borderColor: evento.calendario_color,
+                                textColor: '#ffffff',
+                                allDay: false,  // Forzar que el evento no sea considerado "allDay"
+                                display: window.calendariosVisibles.has(evento.calendario_id.toString()) ? 'auto' : 'none',
+                                className: 'fc-daygrid-block-event', // Forzar clase de bloque
+                                extendedProps: {
+                                    descripcion: evento.descripcion,
+                                    calendario_id: evento.calendario_id,
+                                    calendario_nombre: evento.calendario_nombre,
+                                    recurrencia: evento.recurrencia,
+                                    recurrencia_fin: evento.recurrencia_fin,
+                                    dias_semana: evento.dias_semana
+                                }
+                            });
                         }
-                    }));
-                    console.log('Eventos cargados:', eventosFormateados); // Debug
-                    successCallback(eventosFormateados);
+                    });
+                    successCallback(allEvents);
                 })
                 .catch(error => {
                     console.error('Error al cargar eventos:', error);
@@ -137,6 +166,13 @@ document.addEventListener('DOMContentLoaded', function() {
             eventoModal.show();
         },
         eventDidMount: function(info) {
+            // Forzar estilo de bloque para eventos de un solo día
+            if (info.event.start?.toDateString() === info.event.end?.toDateString()) {
+                info.el.classList.add('fc-daygrid-block-event');
+                info.el.style.backgroundColor = info.event.backgroundColor;
+                info.el.style.borderColor = info.event.borderColor;
+            }
+            
             // Verificar si el calendario está visible
             const calId = info.event.extendedProps.calendario_id.toString();
             if (!window.calendariosVisibles.has(calId)) {
@@ -152,6 +188,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 header.innerText = 'Horas';
                 timeGridAxis.insertBefore(header, timeGridAxis.firstChild);
             }
+        },
+        views: {
+            dayGridMonth: {
+                dayMaxEventRows: true,
+                dayMaxEvents: true,
+                eventDisplay: 'block',
+                eventClassNames: ['fc-daygrid-block-event']
+            }
         }
     });
     
@@ -165,14 +209,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Guardar nuevo calendario
     document.getElementById('guardar-calendario').addEventListener('click', function() {
+        // Utilizar el input hidden para determinar si es edición o creación
+        const id = document.getElementById('calendario_id_hidden').value;
         const formData = {
-            id: document.getElementById('calendario_id').value,
+            id: id, 
             nombre: document.getElementById('calendario_nombre').value,
             color: document.getElementById('calendario_color').value
         };
         
         fetch('api/calendarios.php', {
-            method: formData.id ? 'PUT' : 'POST',
+            method: id ? 'PUT' : 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(formData)
         })
@@ -181,7 +227,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const calendarioModal = bootstrap.Modal.getInstance(document.getElementById('calendarioModal'));
             calendarioModal.hide();
             cargarCalendarios();
+            // Reiniciar el formulario incluyendo el hidden
             document.getElementById('calendarioForm').reset();
+            document.getElementById('calendario_id_hidden').value = '';
         });
     });
 
@@ -198,16 +246,31 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const calendarioSelect = document.getElementById('calendario_id');
+        const selectedCalendario = calendarioSelect.options[calendarioSelect.selectedIndex];
+        const calendarioColor = selectedCalendario.getAttribute('data-color');
+
         const formData = {
             id: document.getElementById('evento_id').value,
             titulo: document.getElementById('titulo').value,
             descripcion: document.getElementById('descripcion').value,
             fecha_inicio: document.getElementById('fecha_inicio').value,
             fecha_fin: document.getElementById('fecha_fin').value,
-            calendario_id: document.getElementById('calendario_id').value,
+            calendario_id: calendarioSelect.value,
             recurrencia: document.getElementById('recurrencia').value,
-            recurrencia_fin: document.getElementById('recurrencia_fin').value || null
+            recurrencia_fin: document.getElementById('recurrencia_fin').value || null,
+            dias_semana: Array.from(document.querySelectorAll('input[name="dias_semana"]:checked')).map(el => el.value),
+            calendario_color: calendarioColor
         };
+
+        // Extraer color del calendario desde el option seleccionado
+        const select = document.getElementById('calendario_id');
+        const selectedOption = select.options[select.selectedIndex];
+        formData.calendario_color = selectedOption ? selectedOption.getAttribute('data-color') : '#3788d8';
+
+        // Depuración: Verificar los datos enviados
+        console.log('Datos enviados:', formData);
+        console.log('Comprobación dias_semana:', formData.dias_semana);
 
         fetch('./api/eventos.php', {
             method: formData.id ? 'PUT' : 'POST',
@@ -215,7 +278,9 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify(formData)
         })
         .then(response => {
-            if (!response.ok) throw new Error('Error en la respuesta del servidor');
+            if (!response.ok) {
+                throw new Error('Error en la respuesta del servidor');
+            }
             return response.json();
         })
         .then(data => {
@@ -277,7 +342,8 @@ function cargarCalendarios() {
                     </div>
                 `;
                 
-                select.innerHTML += `<option value="${calId}">${cal.nombre}</option>`;
+                // Agregar la opción del select con data-color
+                select.innerHTML += `<option value="${calId}" data-color="${cal.color}">${cal.nombre}</option>`;
             });
 
             // Event listeners para los checkboxes
@@ -359,13 +425,30 @@ function prepararModal(tipo, info) {
         document.getElementById('calendario_color').value = info.backgroundColor;
         document.getElementById('eliminar-evento').style.display = 'block'; // Mostrar botón de eliminar
     }
+    
+    // Añadir checkboxes para los días de la semana
+    const diasSemanaContainer = document.getElementById('dias_semana_container');
+    if (diasSemanaContainer) {
+        diasSemanaContainer.innerHTML = `
+            <label><input type="checkbox" name="dias_semana" value="L"> L</label>
+            <label><input type="checkbox" name="dias_semana" value="M"> M</label>
+            <label><input type="checkbox" name="dias_semana" value="X"> X</label>
+            <label><input type="checkbox" name="dias_semana" value="J"> J</label>
+            <label><input type="checkbox" name="dias_semana" value="V"> V</label>
+            <label><input type="checkbox" name="dias_semana" value="S"> S</label>
+            <label><input type="checkbox" name="dias_semana" value="D"> D</label>
+        `;
+    } else {
+        console.error('El contenedor de días de la semana no se encontró en el DOM.');
+    }
 }
 
 function editarCalendario(id) {
     fetch(`api/calendarios.php?id=${id}`)
         .then(response => response.json())
         .then(calendario => {
-            document.getElementById('calendario_id').value = calendario.id;
+            // Llenar el campo hidden para saber que se está editando
+            document.getElementById('calendario_id_hidden').value = calendario.id;
             document.getElementById('calendario_nombre').value = calendario.nombre;
             document.getElementById('calendario_color').value = calendario.color;
             const calendarioModal = bootstrap.Modal.getInstance(document.getElementById('calendarioModal'));
@@ -415,37 +498,33 @@ function generarEventosRecurrentes(evento) {
     const fin = new Date(evento.fecha_fin);
     const finRecurrencia = new Date(evento.recurrencia_fin);
     const duracion = fin.getTime() - inicio.getTime();
+    const mapDias = { 'D': 0, 'L': 1, 'M': 2, 'X': 3, 'J': 4, 'V': 5, 'S': 6 };
 
     let fechaActual = new Date(inicio);
     while (fechaActual <= finRecurrencia) {
-        const fechaFinEvento = new Date(fechaActual.getTime() + duracion);
-        eventos.push({
-            id: evento.id,
-            title: evento.titulo,
-            start: fechaActual.toISOString(),
-            end: fechaFinEvento.toISOString(),
-            extendedProps: {
-                descripcion: evento.descripcion,
-                calendario_id: evento.calendario_id,
-                recurrencia: evento.recurrencia
-            }
-        });
-
-        // Calcular siguiente fecha según recurrencia
-        switch(evento.recurrencia) {
-            case 'daily':
-                fechaActual.setDate(fechaActual.getDate() + 1);
-                break;
-            case 'weekly':
-                fechaActual.setDate(fechaActual.getDate() + 7);
-                break;
-            case 'biweekly':
-                fechaActual.setDate(fechaActual.getDate() + 14);
-                break;
-            case 'monthly':
-                fechaActual.setMonth(fechaActual.getMonth() + 1);
-                break;
+        const diaActual = fechaActual.getDay();
+        if (evento.dias_semana.some(d => mapDias[d] === diaActual)) {
+            const fechaFinEvento = new Date(fechaActual.getTime() + duracion);
+            eventos.push({
+                id: `${evento.id}-${fechaActual.getTime()}`,
+                title: evento.titulo,
+                start: fechaActual.toISOString(),
+                end: fechaFinEvento.toISOString(),
+                backgroundColor: evento.calendario_color,
+                borderColor: evento.calendario_color,
+                textColor: '#ffffff',
+                allDay: false,  // Forzar que el evento recurrente no sea "allDay"
+                extendedProps: {
+                    descripcion: evento.descripcion,
+                    calendario_id: evento.calendario_id,
+                    calendario_nombre: evento.calendario_nombre,
+                    recurrencia: evento.recurrencia,
+                    dias_semana: evento.dias_semana,
+                    calendario_color: evento.calendario_color
+                }
+            });
         }
+        fechaActual.setDate(fechaActual.getDate() + 1);
     }
     return eventos;
 }

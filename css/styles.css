@@ -421,3 +421,21 @@
 }
 
 /* ...existing code... */
+
+.fc-daygrid-block-event {
+    margin: 1px 0 !important;
+    padding: 2px 4px !important;
+    border-radius: 3px !important;
+    display: block !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.fc-daygrid-dot-event {
+    display: block !important;
+    background-color: inherit !important;
+    border-color: inherit !important;
+}
+
+/* ...existing code... */

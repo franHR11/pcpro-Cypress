@@ -27,6 +27,12 @@ CREATE TABLE eventos (
     fecha_fin DATETIME NOT NULL,
     recurrencia ENUM('none', 'daily', 'weekly', 'biweekly', 'monthly') DEFAULT 'none',
     recurrencia_fin DATE,
+    dias_semana TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (calendario_id) REFERENCES calendarios(id) ON DELETE CASCADE
+);
+
+CREATE TABLE dias_semana (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre_dia VARCHAR(10) NOT NULL
 );

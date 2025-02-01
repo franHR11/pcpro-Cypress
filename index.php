@@ -95,6 +95,7 @@ if (!isset($_SESSION['usuario_id'])) {
                             <label>Repetir hasta</label>
                             <input type="date" class="form-control" id="recurrencia_fin">
                         </div>
+                        <div class="mb-3" id="dias_semana_container"></div> <!-- Contenedor para los días de la semana -->
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -115,6 +116,8 @@ if (!isset($_SESSION['usuario_id'])) {
                 </div>
                 <div class="modal-body">
                     <form id="calendarioForm">
+                        <!-- Nuevo campo hidden para distinguir edición/creación -->
+                        <input type="hidden" id="calendario_id_hidden">
                         <div class="mb-3">
                             <label>Nombre</label>
                             <input type="text" class="form-control" id="calendario_nombre" required>
