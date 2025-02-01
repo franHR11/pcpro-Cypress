@@ -347,10 +347,77 @@
 
 /* Asegurar que el contenedor tenga altura */
 .col-md-10 {
-    height: calc(100vh - 100px) !important; /* Altura total menos la navbar */
+    height: auto !important; /* Altura dinámica según el contenido */
+    min-height: calc(100vh - 100px) !important; /* Altura mínima menos la navbar */
+    overflow-x: hidden; /* Eliminar scroll horizontal */
 }
 
 /* Estilo para el select de calendarios en el modal */
 #calendario_id option {
     padding: 8px;
 }
+
+/* ...existing code... */
+
+.fc-timegrid-slot-label {
+    width: 80px; /* Aumenta la anchura de las celdas de hora */
+    height: 40px !important; /* Aumenta la altura de las celdas de hora */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
+    color: #198754;
+    font-weight: bold;
+}
+
+.fc-timegrid-slot {
+    height: 60px; /* Aumenta la altura de las celdas de hora */
+}
+
+.fc-timegrid-axis {
+    background-color: #198754; /* Color de fondo verde */
+    color: white; /* Color del texto blanco */
+    border-right: 1px solid #198754;
+}
+
+.fc-timegrid-axis-header {
+    background-color: #198754; /* Color de fondo verde */
+    color: white; /* Color del texto blanco */
+    padding: 10px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.fc-timegrid-slot-label-cushion {
+    padding: 10px;
+    background-color: #e8f5e9;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.fc-timegrid-slot:hover {
+    background-color: #f0fff4;
+    transform: scale(1.01);
+    z-index: 1;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* Asegurar que el contenedor tenga altura dinámica */
+.col-md-10 {
+    height: auto !important; /* Altura dinámica según el contenido */
+    min-height: calc(100vh - 100px) !important; /* Altura mínima menos la navbar */
+    overflow-x: hidden; /* Eliminar scroll horizontal */
+}
+
+/* Ajustar la clase .row para eliminar el scroll horizontal */
+.row {
+    --bs-gutter-x: 1.5rem;
+    --bs-gutter-y: 0;
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: calc(-1 * var(--bs-gutter-y));
+    margin-right: 0; /* Ajuste para eliminar scroll horizontal */
+    margin-left: 0; /* Ajuste para eliminar scroll horizontal */
+}
+
+/* ...existing code... */

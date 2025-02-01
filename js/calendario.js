@@ -50,7 +50,24 @@ document.addEventListener('DOMContentLoaded', function() {
             week: 'Semana',
             day: 'Día'
         },
-        allDayText: 'Todo el día',
+        allDaySlot: false, // Eliminar la sección "Todo el día"
+        slotDuration: '00:30:00', // Intervalo de 30 minutos
+        slotLabelInterval: '00:30', // Etiquetas de intervalo de 30 minutos
+        slotLabelFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // Formato 24 horas
+        },
+        slotLabelClassNames: 'fc-timegrid-slot-label', // Añadir clase personalizada
+        dayHeaderFormat: {
+            weekday: 'long' // Nombre completo del día
+        },
+        dayHeaderClassNames: 'calendario-header-dia',
+        slotMinTime: '00:00:00', // Hora mínima
+        slotMaxTime: '24:00:00', // Hora máxima
+        height: 'auto', // Ajustar altura automáticamente
+        contentHeight: 'auto', // Ajustar altura del contenido automáticamente
+        slotLabelClassNames: 'fc-timegrid-slot-label', // Añadir clase personalizada
         dayHeaderFormat: {
             weekday: 'long' // Nombre completo del día
         },
@@ -125,6 +142,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!window.calendariosVisibles.has(calId)) {
                 info.event.setProp('display', 'none');
             }
+        },
+        viewDidMount: function(view) {
+            // Añadir título "Horas" en la columna de horas
+            const timeGridAxis = document.querySelector('.fc-timegrid-axis');
+            if (timeGridAxis) {
+                const header = document.createElement('div');
+                header.className = 'fc-timegrid-axis-header';
+                header.innerText = 'Horas';
+                timeGridAxis.insertBefore(header, timeGridAxis.firstChild);
+            }
         }
     });
     
@@ -139,17 +166,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Guardar nuevo calendario
     document.getElementById('guardar-calendario').addEventListener('click', function() {
         const formData = {
+            id: document.getElementById('calendario_id').value,
             nombre: document.getElementById('calendario_nombre').value,
             color: document.getElementById('calendario_color').value
         };
         
         fetch('api/calendarios.php', {
-            method: 'POST',
+            method: formData.id ? 'PUT' : 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(formData)
         })
         .then(response => response.json())
         .then(data => {
+            const calendarioModal = bootstrap.Modal.getInstance(document.getElementById('calendarioModal'));
             calendarioModal.hide();
             cargarCalendarios();
             document.getElementById('calendarioForm').reset();
@@ -200,35 +229,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Función para actualizar eventos
-    window.actualizarEventosVisibles = function() {
-        const eventos = calendar.getEvents();
-        eventos.forEach(evento => {
-            const calId = evento.extendedProps.calendario_id.toString();
-            const display = window.calendariosVisibles.has(calId) ? 'auto' : 'none';
-            evento.setProp('display', display);
-        });
-    };
-
-    // Función para mostrar eventos
-    window.mostrarEventosCalendario = function(calendarId) {
-        const eventos = calendar.getEvents();
-        eventos.forEach(evento => {
-            if (evento.extendedProps.calendario_id == calendarId) {
-                evento.setProp('display', 'auto');
-            }
-        });
-    };
-
-    // Función para ocultar eventos
-    window.ocultarEventosCalendario = function(calendarId) {
-        const eventos = calendar.getEvents();
-        eventos.forEach(evento => {
-            if (evento.extendedProps.calendario_id == calendarId) {
-                evento.setProp('display', 'none');
-            }
-        });
-    };
+    // Eliminar evento
+    document.getElementById('eliminar-evento').addEventListener('click', function() {
+        const eventoId = document.getElementById('evento_id').value;
+        if (eventoId && confirm('¿Estás seguro de eliminar este evento?')) {
+            eliminarEvento(eventoId);
+        }
+    });
 });
 
 // Mover las funciones auxiliares al scope global
@@ -339,6 +346,7 @@ function prepararModal(tipo, info) {
         document.getElementById('evento_id').value = '';
         document.getElementById('fecha_inicio').value = info.startStr;
         document.getElementById('fecha_fin').value = info.endStr;
+        document.getElementById('eliminar-evento').style.display = 'none'; // Ocultar botón de eliminar
     } else {
         document.getElementById('evento_id').value = info.id;
         document.getElementById('titulo').value = info.title;
@@ -347,6 +355,9 @@ function prepararModal(tipo, info) {
         document.getElementById('fecha_fin').value = info.end;
         document.getElementById('calendario_id').value = info.extendedProps.calendario_id;
         document.getElementById('recurrencia').value = info.extendedProps.recurrencia;
+        // Añadir color del calendario al evento
+        document.getElementById('calendario_color').value = info.backgroundColor;
+        document.getElementById('eliminar-evento').style.display = 'block'; // Mostrar botón de eliminar
     }
 }
 
@@ -357,6 +368,7 @@ function editarCalendario(id) {
             document.getElementById('calendario_id').value = calendario.id;
             document.getElementById('calendario_nombre').value = calendario.nombre;
             document.getElementById('calendario_color').value = calendario.color;
+            const calendarioModal = bootstrap.Modal.getInstance(document.getElementById('calendarioModal'));
             calendarioModal.show();
         });
 }
@@ -371,6 +383,29 @@ function eliminarCalendario(id) {
             cargarCalendarios();
             calendar.refetchEvents();
         }
+    });
+}
+
+function eliminarEvento(id) {
+    fetch(`./api/eventos.php?id=${id}`, {
+        method: 'DELETE'
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Error en la respuesta del servidor');
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            calendar.refetchEvents(); // Recargar eventos
+            const eventoModal = bootstrap.Modal.getInstance(document.getElementById('eventoModal'));
+            eventoModal.hide(); // Ocultar modal
+        } else {
+            alert('Error al eliminar el evento');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al eliminar el evento');
     });
 }
 
@@ -414,3 +449,13 @@ function generarEventosRecurrentes(evento) {
     }
     return eventos;
 }
+
+// Función para actualizar eventos
+window.actualizarEventosVisibles = function() {
+    const eventos = calendar.getEvents();
+    eventos.forEach(evento => {
+        const calId = evento.extendedProps.calendario_id.toString();
+        const display = window.calendariosVisibles.has(calId) ? 'auto' : 'none';
+        evento.setProp('display', display);
+    });
+};

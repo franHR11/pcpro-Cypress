@@ -76,9 +76,11 @@ try {
             break;
             
         case 'DELETE':
-            $id = $_GET['id'];
+            if (!isset($_GET['id'])) {
+                throw new Exception('ID no proporcionado');
+            }
             $stmt = $pdo->prepare("DELETE FROM eventos WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt->execute([$_GET['id']]);
             echo json_encode(['success' => true]);
             break;
     }
