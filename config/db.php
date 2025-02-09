@@ -1,9 +1,9 @@
 <?php
 try {
     $pdo = new PDO(
-        "mysql:host=localhost;dbname=calendario_db;charset=utf8",
+        "mysql:host=localhost:3306;dbname=cypress;charset=utf8",
         "cypress",
-        "cypress",
+        "Cypress123$.",
         [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
