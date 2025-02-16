@@ -124,5 +124,6 @@ if (!isset($_SESSION['usuario_id'])) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/todo.js"></script>
+    <script src="https://aurora.pcprogramacion.es/tracking/script.js"></script>
 </body>
 </html>

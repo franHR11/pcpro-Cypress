@@ -1,9 +1,9 @@
 <?php
 try {
     $pdo = new PDO(
-        "mysql:host=************;dbname=cypress;charset=utf8",
-        "************",
-        "************",
+        "mysql:host=localhost;dbname=********;charset=utf8",
+        "*********",
+        "*********",
         [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
